@@ -133,23 +133,21 @@
 // и протестирован изнутри заблокированных стран (RU/IR/VN).
 const SOURCES = [
   'https://zakky8.github.io/mtproto-proxy-pro/proxies.json',
-  // запасная база (другой проект, проверка по TCP)
-  'https://raw.githubusercontent.com/Therealwh/MTPproxyLIST/main/verified/proxy_all_verified.json',
 ];
 
-// запасной список: топ-10 из базы на 30.07.2026 (handshake OK, доступны из RU,
-// resilience 100%) — показываются, только если базы недоступны
+// запасной список: проверены НАСТОЯЩИМ TLS-рукопожатием дважды (30.07.2026),
+// все подтверждённо доступны из России — показываются, если базы недоступны
 const FALLBACK = [
-  {host:'a.red-eyes.co.uk', port:443, secret:'ee3d452ace1dc3eba3f6064fe8291dfd59612e7265642d657965732e636f2e756b', region:'CA'},
-  {host:'157.240.22.2', port:443, secret:'ee00000000000000000000000000000000696f2e696f', region:'US'},
   {host:'85.17.89.193', port:443, secret:'ee76f6583e6b509d946c56287a9ca59dc362726f7773696e672e79616e6465782e636f6d', region:'NL'},
-  {host:'50.7.41.162', port:443, secret:'ee011808bcccfd224644ca7f231846a7d46d61782e7275', region:'CH'},
-  {host:'ma.hastim.co.uk', port:443, secret:'ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d', region:'LT'},
-  {host:'132.243.235.189', port:443, secret:'ee580a561631a7217d4a0607bb2be8930e79616e6465782e7275', region:'NL'},
-  {host:'91.108.248.230', port:443, secret:'ee483cb87d2e5a90eeb745841a0f0e940679616e6465782e7275', region:'NL'},
   {host:'89.35.131.217', port:443, secret:'ee21406fa1321a733a9fe7edd39ddbe4fe7777772e79616e6465782e7275', region:'NL'},
-  {host:'132.243.235.187', port:443, secret:'ee89db719934b04d0875b8a84c948e57fa79616e6465782e7275', region:'NL'},
+  {host:'50.7.41.162', port:443, secret:'ee011808bcccfd224644ca7f231846a7d46d61782e7275', region:'CH'},
+  {host:'a.red-eyes.co.uk', port:443, secret:'ee3d452ace1dc3eba3f6064fe8291dfd59612e7265642d657965732e636f2e756b', region:'CA'},
+  {host:'molfix.range-abia.ir', port:443, secret:'ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d', region:'DE'},
   {host:'f1.car-race.co.uk', port:443, secret:'ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d', region:'LT'},
+  {host:'sv4.just-money.co.uk', port:443, secret:'ee1603010200010001fc030386e24c3add626973636f7474692e79656b74616e65742e636f6d', region:'NL'},
+  {host:'developer.davazdah.info', port:443, secret:'ee1603010200010001fc030386e24c3add626973636f7474692e79656b74616e65742e636f6d', region:'DE'},
+  {host:'admetrics.uadapp.meshzen.ir', port:443, secret:'ee1603010200010001fc030386e24c3add7777772e7961686f6f2e636f6d', region:'NL'},
+  {host:'50.7.144.50', port:443, secret:'ee25cbb92cbe5ef91a21da4e802e60675f6164732e78352e7275', region:'NL'},
 ];
 
 const btn = document.getElementById('findBtn');
@@ -186,22 +184,28 @@ async function findProxies(){
       return;
     }
 
-    // берём только прокси с успешным MTProto-рукопожатием;
-    // сначала те, что подтверждённо работают из России,
-    // сортируем по устойчивости к блокировкам и аптайму
+    // берём только прокси с успешным MTProto-рукопожатием,
+    // только FakeTLS (секрет ee… — устойчивы к DPI-блокировкам)
+    // и только подтверждённо работающие из России
     const good = data
       .filter(p => (p.server||p.host) && p.port && p.secret)
       .filter(p => !p.status || p.status === 'handshake_ok')
+      .filter(p => String(p.secret).toLowerCase().startsWith('ee'))
+      .filter(p => (p.reachable_from||[]).includes('RU'))
       .map(p => ({
         host: String(p.server||p.host).replace(/\.$/,''),
         port: p.port, secret: p.secret,
         region: p.country || p.region || '',
-        ru: (p.reachable_from||[]).includes('RU') ? 1 : 0,
         score: (p.resilience||0)*10000 + (p.uptime_pct||0)*10 - (p.latency_ms||999)/1000,
       }))
-      .sort((a,b) => (b.ru - a.ru) || (b.score - a.score));
+      .sort((a,b) => b.score - a.score);
 
+    // если RU-подтверждённых мало — добираем из запасного списка
     const top = good.slice(0, 10);
+    for (const f of FALLBACK){
+      if (top.length >= 10) break;
+      if (!top.some(t => t.host === f.host)) top.push(f);
+    }
     if (!top.length) throw new Error('база пуста, нажми ещё раз');
 
     render(top);
