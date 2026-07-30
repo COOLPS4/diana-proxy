@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Special Proxy for Diana</title>
+
+<!-- PWA / iPhone "На экран Домой" -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Proxy Diana">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#0b0b14">
+
+<style>
+  :root{
+    --bg:#0b0b14;
+    --card:rgba(255,255,255,.055);
+    --card-brd:rgba(255,255,255,.09);
+    --txt:#f2f2f7;
+    --muted:#8e8ea3;
+    --a1:#a855f7;
+    --a2:#ec4899;
+    --ok:#34d399;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;
+    background:var(--bg);
+    color:var(--txt);
+    min-height:100dvh;
+    padding:calc(env(safe-area-inset-top) + 28px) 18px calc(env(safe-area-inset-bottom) + 28px);
+    overflow-x:hidden;
+  }
+  /* фоновое сияние */
+  .glow{position:fixed;border-radius:50%;filter:blur(110px);opacity:.35;pointer-events:none;z-index:0}
+  .glow.g1{width:340px;height:340px;background:var(--a1);top:-120px;left:-100px}
+  .glow.g2{width:300px;height:300px;background:var(--a2);bottom:-100px;right:-90px}
+
+  .wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 120px)}
+
+  header{text-align:center;margin-bottom:30px}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+    border:1px solid var(--card-brd);border-radius:999px;padding:6px 14px;margin-bottom:16px;
+    background:var(--card);backdrop-filter:blur(12px)
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);animation:pulse 1.6s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  h1{
+    font-size:clamp(30px,8.5vw,42px);font-weight:800;line-height:1.12;letter-spacing:-.02em;
+    background:linear-gradient(120deg,#fff 20%,var(--a1) 55%,var(--a2) 90%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  h1 span{display:block}
+  .sub{color:var(--muted);font-size:14.5px;margin-top:12px;line-height:1.5}
+
+  /* список прокси */
+  .list{margin-top:22px;display:flex;flex-direction:column;gap:12px}
+  .card{
+    background:var(--card);border:1px solid var(--card-brd);border-radius:18px;padding:15px 16px;
+    backdrop-filter:blur(14px);animation:up .4s both;
+  }
+  .card:nth-child(n){animation-delay:calc(var(--i)*.05s)}
+  @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .info{min-width:0;flex:1}
+  .host{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+  .meta{display:flex;gap:8px;margin-top:6px;font-size:12px;color:var(--muted);align-items:center;flex-wrap:wrap}
+  .pill{border:1px solid var(--card-brd);border-radius:999px;padding:2.5px 9px;background:rgba(255,255,255,.04)}
+  .pill.ok{color:var(--ok);border-color:rgba(52,211,153,.35)}
+  .acts{display:flex;gap:8px;flex-shrink:0}
+  .btn{
+    border:none;border-radius:13px;padding:11px 14px;font-size:13.5px;font-weight:700;cursor:pointer;
+    font-family:inherit;color:#fff;transition:transform .12s;white-space:nowrap;
+  }
+  .btn:active{transform:scale(.93)}
+  .copy{background:rgba(255,255,255,.1);border:1px solid var(--card-brd)}
+  .copy.done{background:rgba(52,211,153,.18);border-color:rgba(52,211,153,.45);color:var(--ok)}
+  .go{background:linear-gradient(120deg,var(--a1),var(--a2))}
+  .go a{color:#fff;text-decoration:none}
+
+  footer{margin-top:auto;padding-top:34px;text-align:center;color:var(--muted);font-size:12px}
+  footer b{background:linear-gradient(120deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+</style>
+</head>
+<body>
+<div class="glow g1"></div><div class="glow g2"></div>
+
+<div class="wrap">
+  <header>
+    <div class="badge"><span class="dot"></span> проверенные прокси</div>
+    <h1>Special Proxy <span>for Diana</span></h1>
+    <p class="sub">10 рабочих MTProto-прокси для Telegram.</p>
+  </header>
+
+  <div class="list" id="list"></div>
+
+  <footer>made for <b>Diana</b></footer>
+</div>
+
+<script>
+// 10 проверенных рабочих прокси (проверены по TCP 30.07.2026)
+const PROXIES = [
+  {host:'95.217.244.189', port:8443, secret:'dd104462821249bd7ac519130220c25d09', region:'EU'},
+  {host:'5.75.203.37', port:443, secret:'dd79e7010200010007f0030386e24c3add', region:'EU'},
+  {host:'37.221.92.130', port:443, secret:'ee1603010200010001fc030386e24c3add626973636f7474692e79656b74616e65742e636f6d', region:'EU'},
+  {host:'82.152.162.11', port:10002, secret:'ee548593a9c0688f4f7d9d57377897d964636c6f7564666c6172652e636f6d', region:'EU'},
+  {host:'49.13.47.185', port:443, secret:'1320PuNyHw_LQKT_Y7XNJw==', region:'EU'},
+  {host:'77.233.221.169', port:443, secret:'74ddcd2089fe7535e18f5e6a654ef734', region:'EU'},
+  {host:'91.107.176.64', port:443, secret:'YyEEgYdJXfrFmgMCIMJdjjRueWVrdGFuZXQ', region:'EU'},
+  {host:'87.248.129.7', port:2053, secret:'ee1603010200010001fc030386e24c3add7777772e7961686f6f2e636f6d', region:'EU'},
+  {host:'79.137.196.223', port:7443, secret:'eeeeb30662ee79541fb143515ad872d2e9dd7777772e636c6f7564666c6172652e636f6d', region:'EU'},
+  {host:'165.232.81.38', port:443, secret:'eed77db43ee3721f0fcb40a4ff63b5cd2768797374657269612e616c7a6f636c6f75642e73697465', region:'EU'},
+];
+
+const listEl = document.getElementById('list');
+
+function render(proxies){
+  listEl.innerHTML = proxies.map((p,i)=>{
+    const s    = encodeURIComponent(p.secret);
+    const link = `https://t.me/proxy?server=${p.host}&port=${p.port}&secret=${s}`;
+    const tg   = `tg://proxy?server=${p.host}&port=${p.port}&secret=${s}`;
+    return `
+    <div class="card" style="--i:${i}">
+      <div class="row">
+        <div class="info">
+          <div class="host">${p.host}:${p.port}</div>
+          <div class="meta">
+            <span class="pill ok">● live</span>
+            ${p.region ? `<span class="pill">${p.region}</span>` : ''}
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn copy" onclick="copyProxy(this,'${link}')">Копировать</button>
+          <button class="btn go" onclick="location.href='${tg}'">→ TG</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+render(PROXIES);
+
+async function copyProxy(el, text){
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  const old = el.textContent;
+  el.textContent = '✓ Готово'; el.classList.add('done');
+  setTimeout(()=>{ el.textContent = old; el.classList.remove('done'); }, 1600);
+}
+
+// сервис-воркер для работы как приложение
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
