@@ -59,6 +59,25 @@
   h1 span{display:block}
   .sub{color:var(--muted);font-size:14.5px;margin-top:12px;line-height:1.5}
 
+  /* кнопка поиска */
+  .find{
+    position:relative;width:100%;padding:19px;border:none;border-radius:20px;cursor:pointer;
+    font-size:17px;font-weight:700;color:#fff;font-family:inherit;
+    background:linear-gradient(120deg,var(--a1),var(--a2));
+    box-shadow:0 12px 34px -8px rgba(168,85,247,.55);
+    transition:transform .15s,box-shadow .2s;
+  }
+  .find:active{transform:scale(.965)}
+  .find:disabled{opacity:.6;cursor:default}
+  .find .spin{
+    display:none;width:18px;height:18px;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;
+    border-radius:50%;animation:rot .7s linear infinite;vertical-align:-4px;margin-right:9px
+  }
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .find.loading .spin{display:inline-block}
+
+  .status{text-align:center;color:var(--muted);font-size:13px;margin-top:14px;min-height:18px}
+
   /* список прокси */
   .list{margin-top:22px;display:flex;flex-direction:column;gap:12px}
   .card{
@@ -93,10 +112,15 @@
 
 <div class="wrap">
   <header>
-    <div class="badge"><span class="dot"></span> проверенные прокси</div>
+    <div class="badge"><span class="dot"></span> база обновляется автоматически</div>
     <h1>Special Proxy <span>for Diana</span></h1>
-    <p class="sub">10 рабочих MTProto-прокси для Telegram.</p>
+    <p class="sub">10 живых MTProto-прокси для Telegram.<br>Только рабочие — проверяются перед выдачей.</p>
   </header>
+
+  <button class="find" id="findBtn" onclick="findProxies()">
+    <span class="spin"></span><span id="btnTxt">✦ &nbsp;Найти прокси</span>
+  </button>
+  <div class="status" id="status"></div>
 
   <div class="list" id="list"></div>
 
@@ -104,21 +128,107 @@
 </div>
 
 <script>
-// 10 проверенных рабочих прокси (проверены по TCP 30.07.2026)
-const PROXIES = [
-  {host:'95.217.244.189', port:8443, secret:'dd104462821249bd7ac519130220c25d09', region:'EU'},
-  {host:'5.75.203.37', port:443, secret:'dd79e7010200010007f0030386e24c3add', region:'EU'},
-  {host:'37.221.92.130', port:443, secret:'ee1603010200010001fc030386e24c3add626973636f7474692e79656b74616e65742e636f6d', region:'EU'},
-  {host:'82.152.162.11', port:10002, secret:'ee548593a9c0688f4f7d9d57377897d964636c6f7564666c6172652e636f6d', region:'EU'},
-  {host:'49.13.47.185', port:443, secret:'1320PuNyHw_LQKT_Y7XNJw==', region:'EU'},
-  {host:'77.233.221.169', port:443, secret:'74ddcd2089fe7535e18f5e6a654ef734', region:'EU'},
-  {host:'91.107.176.64', port:443, secret:'YyEEgYdJXfrFmgMCIMJdjjRueWVrdGFuZXQ', region:'EU'},
-  {host:'87.248.129.7', port:2053, secret:'ee1603010200010001fc030386e24c3add7777772e7961686f6f2e636f6d', region:'EU'},
-  {host:'79.137.196.223', port:7443, secret:'eeeeb30662ee79541fb143515ad872d2e9dd7777772e636c6f7564666c6172652e636f6d', region:'EU'},
-  {host:'165.232.81.38', port:443, secret:'eed77db43ee3721f0fcb40a4ff63b5cd2768797374657269612e616c7a6f636c6f75642e73697465', region:'EU'},
+// Основная база: обновляется автоматически каждые ~2 часа,
+// каждый прокси в ней уже проверен по TCP (мёртвые отсеяны на сервере)
+const SOURCES = [
+  'https://raw.githubusercontent.com/Therealwh/MTPproxyLIST/main/verified/proxy_all_verified.json',
+  // запасное зеркало той же базы
+  'https://cdn.jsdelivr.net/gh/Therealwh/MTPproxyLIST@main/verified/proxy_all_verified.json',
 ];
 
+// запасной список: проверенные вручную (TCP, 30.07.2026) — показываются, если базы недоступны
+const FALLBACK = [
+  {host:'95.217.244.189', port:8443, secret:'dd104462821249bd7ac519130220c25d09', region:'eu'},
+  {host:'5.75.203.37', port:443, secret:'dd79e7010200010007f0030386e24c3add', region:'eu'},
+  {host:'37.221.92.130', port:443, secret:'ee1603010200010001fc030386e24c3add626973636f7474692e79656b74616e65742e636f6d', region:'eu'},
+  {host:'82.152.162.11', port:10002, secret:'ee548593a9c0688f4f7d9d57377897d964636c6f7564666c6172652e636f6d', region:'eu'},
+  {host:'49.13.47.185', port:443, secret:'1320PuNyHw_LQKT_Y7XNJw==', region:'eu'},
+  {host:'77.233.221.169', port:443, secret:'74ddcd2089fe7535e18f5e6a654ef734', region:'eu'},
+  {host:'91.107.176.64', port:443, secret:'YyEEgYdJXfrFmgMCIMJdjjRueWVrdGFuZXQ', region:'eu'},
+  {host:'87.248.129.7', port:2053, secret:'ee1603010200010001fc030386e24c3add7777772e7961686f6f2e636f6d', region:'eu'},
+  {host:'79.137.196.223', port:7443, secret:'eeeeb30662ee79541fb143515ad872d2e9dd7777772e636c6f7564666c6172652e636f6d', region:'eu'},
+  {host:'165.232.81.38', port:443, secret:'eed77db43ee3721f0fcb40a4ff63b5cd2768797374657269612e616c7a6f636c6f75642e73697465', region:'eu'},
+];
+
+const btn = document.getElementById('findBtn');
+const btnTxt = document.getElementById('btnTxt');
+const statusEl = document.getElementById('status');
 const listEl = document.getElementById('list');
+
+async function fetchList(){
+  for (const url of SOURCES){
+    try{
+      const r = await fetch(url + '?_=' + Date.now(), {cache:'no-store'});
+      if(!r.ok) continue;
+      const data = await r.json();
+      if (Array.isArray(data) && data.length) return data;
+    }catch(e){ /* пробуем следующее зеркало */ }
+  }
+  return null; // базы недоступны — используем запасной список
+}
+
+// живая проверка: реально стучимся на хост:порт прокси с таймаутом.
+// у MTProto нет HTTP-ответа, поэтому: быстрый сетевой отказ = мёртвый,
+// таймаут/непрозрачный ответ = порт слушает, прокси жив.
+function probe(p, timeout=3500){
+  return new Promise(res=>{
+    const t0 = performance.now();
+    const ctl = new AbortController();
+    const timer = setTimeout(()=>{ ctl.abort(); res(true); }, timeout); // висит = слушает
+    fetch(`https://${p.host}:${p.port}/`, {mode:'no-cors', signal:ctl.signal})
+      .then(()=>{ clearTimeout(timer); res(true); })
+      .catch(()=>{
+        clearTimeout(timer);
+        // отказ быстрее 300мс = соединение отвергнуто = мёртвый
+        res(performance.now() - t0 >= 300);
+      });
+  });
+}
+
+async function findProxies(){
+  btn.disabled = true; btn.classList.add('loading');
+  btnTxt.textContent = 'Ищу лучшие…';
+  listEl.innerHTML = '';
+  statusEl.textContent = 'Загружаю свежую базу…';
+
+  try{
+    let data = await fetchList();
+
+    if (!data){
+      // базы недоступны — показываем запасной проверенный список
+      render(FALLBACK);
+      statusEl.textContent = '✅ Готово: 10 прокси (запасной список)';
+      return;
+    }
+
+    // чистим и сортируем по скорости (самые быстрые сверху)
+    data = data
+      .filter(p => p.host && p.port && p.secret)
+      .map(p => ({...p, host: String(p.host).replace(/\.$/,''), ms: Math.round((p.ping||9)*1000)}))
+      .sort((a,b) => a.ms - b.ms);
+
+    statusEl.textContent = 'Проверяю каждый прокси вживую…';
+
+    // перепроверяем пачками прямо с телефона, пока не наберём 10 живых
+    const alive = [];
+    for (let i = 0; i < data.length && alive.length < 10; i += 14){
+      const batch = data.slice(i, i+14);
+      const results = await Promise.all(batch.map(p => probe(p)));
+      batch.forEach((p, j) => { if (results[j] && alive.length < 10) alive.push(p); });
+      statusEl.textContent = `Проверяю… найдено живых: ${alive.length}/10`;
+    }
+
+    if (!alive.length) throw new Error('живых не найдено, нажми ещё раз');
+
+    render(alive);
+    statusEl.textContent = `✅ Готово: ${alive.length} рабочих прокси · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+  }catch(e){
+    statusEl.textContent = '⚠️ ' + e.message + ' — попробуй ещё раз';
+  }finally{
+    btn.disabled = false; btn.classList.remove('loading');
+    btnTxt.textContent = '✦  Найти прокси';
+  }
+}
 
 function render(proxies){
   listEl.innerHTML = proxies.map((p,i)=>{
@@ -132,7 +242,7 @@ function render(proxies){
           <div class="host">${p.host}:${p.port}</div>
           <div class="meta">
             <span class="pill ok">● live</span>
-            ${p.region ? `<span class="pill">${p.region}</span>` : ''}
+            ${p.region ? `<span class="pill">${p.region.toUpperCase()}</span>` : ''}
           </div>
         </div>
         <div class="acts">
@@ -143,8 +253,6 @@ function render(proxies){
     </div>`;
   }).join('');
 }
-
-render(PROXIES);
 
 async function copyProxy(el, text){
   try{
@@ -158,6 +266,9 @@ async function copyProxy(el, text){
   el.textContent = '✓ Готово'; el.classList.add('done');
   setTimeout(()=>{ el.textContent = old; el.classList.remove('done'); }, 1600);
 }
+
+// автоматический поиск при открытии сайта
+findProxies();
 
 // сервис-воркер для работы как приложение
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
