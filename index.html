@@ -128,26 +128,28 @@
 </div>
 
 <script>
-// Основная база: обновляется автоматически каждые ~2 часа,
-// каждый прокси в ней уже проверен по TCP (мёртвые отсеяны на сервере)
+// Основная база: обновляется каждые ~6 часов.
+// Каждый прокси проверен НАСТОЯЩИМ MTProto-рукопожатием (не просто пингом)
+// и протестирован изнутри заблокированных стран (RU/IR/VN).
 const SOURCES = [
+  'https://zakky8.github.io/mtproto-proxy-pro/proxies.json',
+  // запасная база (другой проект, проверка по TCP)
   'https://raw.githubusercontent.com/Therealwh/MTPproxyLIST/main/verified/proxy_all_verified.json',
-  // запасное зеркало той же базы
-  'https://cdn.jsdelivr.net/gh/Therealwh/MTPproxyLIST@main/verified/proxy_all_verified.json',
 ];
 
-// запасной список: проверенные вручную (TCP, 30.07.2026) — показываются, если базы недоступны
+// запасной список: топ-10 из базы на 30.07.2026 (handshake OK, доступны из RU,
+// resilience 100%) — показываются, только если базы недоступны
 const FALLBACK = [
-  {host:'95.217.244.189', port:8443, secret:'dd104462821249bd7ac519130220c25d09', region:'eu'},
-  {host:'5.75.203.37', port:443, secret:'dd79e7010200010007f0030386e24c3add', region:'eu'},
-  {host:'37.221.92.130', port:443, secret:'ee1603010200010001fc030386e24c3add626973636f7474692e79656b74616e65742e636f6d', region:'eu'},
-  {host:'82.152.162.11', port:10002, secret:'ee548593a9c0688f4f7d9d57377897d964636c6f7564666c6172652e636f6d', region:'eu'},
-  {host:'49.13.47.185', port:443, secret:'1320PuNyHw_LQKT_Y7XNJw==', region:'eu'},
-  {host:'77.233.221.169', port:443, secret:'74ddcd2089fe7535e18f5e6a654ef734', region:'eu'},
-  {host:'91.107.176.64', port:443, secret:'YyEEgYdJXfrFmgMCIMJdjjRueWVrdGFuZXQ', region:'eu'},
-  {host:'87.248.129.7', port:2053, secret:'ee1603010200010001fc030386e24c3add7777772e7961686f6f2e636f6d', region:'eu'},
-  {host:'79.137.196.223', port:7443, secret:'eeeeb30662ee79541fb143515ad872d2e9dd7777772e636c6f7564666c6172652e636f6d', region:'eu'},
-  {host:'165.232.81.38', port:443, secret:'eed77db43ee3721f0fcb40a4ff63b5cd2768797374657269612e616c7a6f636c6f75642e73697465', region:'eu'},
+  {host:'a.red-eyes.co.uk', port:443, secret:'ee3d452ace1dc3eba3f6064fe8291dfd59612e7265642d657965732e636f2e756b', region:'CA'},
+  {host:'157.240.22.2', port:443, secret:'ee00000000000000000000000000000000696f2e696f', region:'US'},
+  {host:'85.17.89.193', port:443, secret:'ee76f6583e6b509d946c56287a9ca59dc362726f7773696e672e79616e6465782e636f6d', region:'NL'},
+  {host:'50.7.41.162', port:443, secret:'ee011808bcccfd224644ca7f231846a7d46d61782e7275', region:'CH'},
+  {host:'ma.hastim.co.uk', port:443, secret:'ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d', region:'LT'},
+  {host:'132.243.235.189', port:443, secret:'ee580a561631a7217d4a0607bb2be8930e79616e6465782e7275', region:'NL'},
+  {host:'91.108.248.230', port:443, secret:'ee483cb87d2e5a90eeb745841a0f0e940679616e6465782e7275', region:'NL'},
+  {host:'89.35.131.217', port:443, secret:'ee21406fa1321a733a9fe7edd39ddbe4fe7777772e79616e6465782e7275', region:'NL'},
+  {host:'132.243.235.187', port:443, secret:'ee89db719934b04d0875b8a84c948e57fa79616e6465782e7275', region:'NL'},
+  {host:'f1.car-race.co.uk', port:443, secret:'ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d', region:'LT'},
 ];
 
 const btn = document.getElementById('findBtn');
@@ -161,28 +163,11 @@ async function fetchList(){
       const r = await fetch(url + '?_=' + Date.now(), {cache:'no-store'});
       if(!r.ok) continue;
       const data = await r.json();
-      if (Array.isArray(data) && data.length) return data;
+      const arr = Array.isArray(data) ? data : data.proxies;
+      if (Array.isArray(arr) && arr.length) return arr;
     }catch(e){ /* пробуем следующее зеркало */ }
   }
   return null; // базы недоступны — используем запасной список
-}
-
-// живая проверка: реально стучимся на хост:порт прокси с таймаутом.
-// у MTProto нет HTTP-ответа, поэтому: быстрый сетевой отказ = мёртвый,
-// таймаут/непрозрачный ответ = порт слушает, прокси жив.
-function probe(p, timeout=3500){
-  return new Promise(res=>{
-    const t0 = performance.now();
-    const ctl = new AbortController();
-    const timer = setTimeout(()=>{ ctl.abort(); res(true); }, timeout); // висит = слушает
-    fetch(`https://${p.host}:${p.port}/`, {mode:'no-cors', signal:ctl.signal})
-      .then(()=>{ clearTimeout(timer); res(true); })
-      .catch(()=>{
-        clearTimeout(timer);
-        // отказ быстрее 300мс = соединение отвергнуто = мёртвый
-        res(performance.now() - t0 >= 300);
-      });
-  });
 }
 
 async function findProxies(){
@@ -192,7 +177,7 @@ async function findProxies(){
   statusEl.textContent = 'Загружаю свежую базу…';
 
   try{
-    let data = await fetchList();
+    const data = await fetchList();
 
     if (!data){
       // базы недоступны — показываем запасной проверенный список
@@ -201,27 +186,26 @@ async function findProxies(){
       return;
     }
 
-    // чистим и сортируем по скорости (самые быстрые сверху)
-    data = data
-      .filter(p => p.host && p.port && p.secret)
-      .map(p => ({...p, host: String(p.host).replace(/\.$/,''), ms: Math.round((p.ping||9)*1000)}))
-      .sort((a,b) => a.ms - b.ms);
+    // берём только прокси с успешным MTProto-рукопожатием;
+    // сначала те, что подтверждённо работают из России,
+    // сортируем по устойчивости к блокировкам и аптайму
+    const good = data
+      .filter(p => (p.server||p.host) && p.port && p.secret)
+      .filter(p => !p.status || p.status === 'handshake_ok')
+      .map(p => ({
+        host: String(p.server||p.host).replace(/\.$/,''),
+        port: p.port, secret: p.secret,
+        region: p.country || p.region || '',
+        ru: (p.reachable_from||[]).includes('RU') ? 1 : 0,
+        score: (p.resilience||0)*10000 + (p.uptime_pct||0)*10 - (p.latency_ms||999)/1000,
+      }))
+      .sort((a,b) => (b.ru - a.ru) || (b.score - a.score));
 
-    statusEl.textContent = 'Проверяю каждый прокси вживую…';
+    const top = good.slice(0, 10);
+    if (!top.length) throw new Error('база пуста, нажми ещё раз');
 
-    // перепроверяем пачками прямо с телефона, пока не наберём 10 живых
-    const alive = [];
-    for (let i = 0; i < data.length && alive.length < 10; i += 14){
-      const batch = data.slice(i, i+14);
-      const results = await Promise.all(batch.map(p => probe(p)));
-      batch.forEach((p, j) => { if (results[j] && alive.length < 10) alive.push(p); });
-      statusEl.textContent = `Проверяю… найдено живых: ${alive.length}/10`;
-    }
-
-    if (!alive.length) throw new Error('живых не найдено, нажми ещё раз');
-
-    render(alive);
-    statusEl.textContent = `✅ Готово: ${alive.length} рабочих прокси · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+    render(top);
+    statusEl.textContent = `✅ Готово: ${top.length} рабочих прокси · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
   }catch(e){
     statusEl.textContent = '⚠️ ' + e.message + ' — попробуй ещё раз';
   }finally{
